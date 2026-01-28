@@ -1,0 +1,21 @@
+# Archivos compilados
+*.exe
+*.o
+*.obj
+*.out
+
+# Archivos de depuración
+*.log
+
+# Archivos de VSCode
+.vscode/
+
+# Archivos de CLion / JetBrains
+.idea/
+
+# Archivos del sistema (Windows / Mac)
+Thumbs.db
+.DS_Store
+
+# Archivos temporales
+*.tmp
