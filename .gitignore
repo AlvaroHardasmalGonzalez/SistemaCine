@@ -1,21 +1,58 @@
-# Archivos compilados
+# ===============================
+# BINARIOS Y ARCHIVOS COMPILADOS
+# ===============================
 *.exe
+*.dll
 *.o
 *.obj
 *.out
+*.a
+*.def
+*.lib
 
-# Archivos de depuración
+# ===============================
+# ARCHIVOS TEMPORALES
+# ===============================
 *.log
+*.tmp
 
-# Archivos de VSCode
+# ===============================
+# CARPETAS GENERADAS AUTOMÁTICAMENTE
+# ===============================
+bin/
+obj/
+build/
+
+# ===============================
+# CODEBLOCKS
+# ===============================
+# Proyectos y compilados
+*.layout
+*.depend
+*.layout.save
+*.cbp.save
+*.config
+
+# Directorios de construcción (CodeBlocks)
+*.objs/
+*.deps/
+
+# ===============================
+# VISUAL STUDIO CODE
+# ===============================
 .vscode/
 
-# Archivos de CLion / JetBrains
-.idea/
-
-# Archivos del sistema (Windows / Mac)
+# ===============================
+# ARCHIVOS DEL SISTEMA (Windows/Mac)
+# ===============================
 Thumbs.db
+ehthumbs.db
+Desktop.ini
 .DS_Store
 
-# Archivos temporales
-*.tmp
+# ===============================
+# COPIAS DE SEGURIDAD
+# ===============================
+*~
+*.bak
+*.old
