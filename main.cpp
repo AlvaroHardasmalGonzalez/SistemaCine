@@ -1,6 +1,5 @@
 #include <iostream>
 #include <array>
-#include <windows.h>
 
 using namespace std;
 
