@@ -1,15 +1,119 @@
 #include <iostream>
 #include <array>
+#include "sqlite3.h"
 
 using namespace std;
 
 const int MAXX=5;
 const int MAXY=7;
 
+sqlite3* db;
+
 typedef array<array<char, MAXY>, MAXX> sala;
+
+void creardatabase()
+{
+    int salida = sqlite3_open("cine.db", &db);
+    if(salida != SQLITE_OK)
+    {
+        cout << "Error al abrir la base de datos." << endl;
+    }
+    else
+    {
+        cout << "Base de datos abierta correctamente." << endl;
+    }
+    string sql = R"(CREATE TABLE IF NOT EXISTS ASIENTOS(SALA INT NOT NULL, FILA INT NOT NULL, COLUMNA INT NOT NULL, ESTADO CHAR(1) NOT NULL, PRIMARY KEY (SALA, FILA, COLUMNA)))";
+    char* mensajeError;
+    int rc = sqlite3_exec(db, sql.c_str(), NULL, 0, &mensajeError);
+
+    if (rc != SQLITE_OK)
+    {
+        cerr << "Error al crear la tabla: " << mensajeError << endl;
+    }
+    else
+    {
+        cout << "Tabla verificada/creada con éxito" << endl;
+    }
+}
+
+int callback_cargar_sala(void* data, int argc, char** argv, char** azColName)
+{
+    sala* s = (sala*)data;
+    int fila = stoi(argv[1]);
+    int col = stoi(argv[2]);
+    char estado = argv[3][0];
+    (*s)[fila][col] = estado;
+    return 0;
+}
+
+int callback_conteo(void* data, int argc, char** argv, char** azColName)
+{
+    int* filas = (int*)data;
+    if (argv[0])
+    {
+        *filas = stoi(argv[0]);
+    }
+    return 0;
+}
+
+void inicializarAsientos()
+{
+    int conteo = 0;
+    char* mensajeError = nullptr;
+    int rc = sqlite3_exec(db, "SELECT COUNT(*) FROM ASIENTOS;", callback_conteo, &conteo, &mensajeError);
+
+    if (rc != SQLITE_OK)
+    {
+        cout << "Error al contar: " << mensajeError << endl;
+        sqlite3_free(mensajeError);
+        return;
+    }
+    if (conteo == 0)
+    {
+        cout << "Base de datos vacía. Generando asientos por primera vez..." << endl;
+        sqlite3_exec(db, "BEGIN TRANSACTION;", NULL, 0, NULL);
+
+        for (int s = 1; s <= 6; s++)
+        {
+            for (int f = 0; f < MAXX; f++)
+            {
+                for (int c = 0; c < MAXY; c++)
+                {
+                    string sql = "INSERT INTO ASIENTOS VALUES (" +
+                                 to_string(s) + "," + to_string(f) + "," +
+                                 to_string(c) + ", 'o');";
+
+                    sqlite3_exec(db, sql.c_str(), NULL, 0, NULL);
+                }
+            }
+        }
+        sqlite3_exec(db, "END TRANSACTION;", NULL, 0, NULL);
+        cout << "Cine inicializado con éxito." << endl;
+    }
+    else
+    {
+        cout << "Asientos cargados desde la base de datos." << endl;
+    }
+}
+
+int callback_mostrar(void* data, int argc, char** argv, char** azColName)
+{
+    int col = stoi(argv[2]);
+    if (col == 0)
+    {
+        cout << argv[1] << ": ";
+    }
+    cout << argv[3] << " ";
+    if (col == 6)
+    {
+        cout << endl;
+    }
+    return 0;
+}
 
 void Introduccion()
 {
+    cout << endl;
     cout << "=============================================" << endl;
     cout << "      SISTEMA DE GESTION DE ENTRADAS" << endl;
     cout << "                 DEL CINE" << endl;
@@ -60,70 +164,37 @@ void inicializar(sala&s)
     }
 }
 
-sala* elegir_sala(sala&s1, sala&s2, sala&s3, sala&s4, sala&s5, sala&s6)
+void mostrar(int salaActual)
 {
-    cout << "Que sala quieres ver? (1, 2, 3, 4, 5, 6): ";
-    char sala;
-    cin >> sala;
-    switch (sala)
-    {
-    case '1':
-        return &s1;
-        break;
-    case '2':
-        return &s2;
-        break;
-    case '3':
-        return &s3;
-        break;
-    case '4':
-        return &s4;
-        break;
-    case '5':
-        return &s5;
-        break;
-    case '6':
-        return &s6;
-        break;
-    default:
-        cout << "Sala equivocada, usando sala 1 por defecto." << endl;
-        return &s1;
-        break;
-    }
-}
-
-void mostrar(sala s)
-{
+    char* mensajeError = nullptr;
     cout << "   ";
-    for(int k=0; k<MAXY; ++k)
+    for(int k = 0; k < MAXY; ++k)
     {
         cout << k << " ";
     }
-    cout << endl;
-
-    for(int k=0; k<16; ++k)
-    {
-        cout << "-";
-    }
-    cout << endl;
-    for(int i=0; i<MAXX; ++i)
-    {
-        cout << i << ": ";
-        for(int j=0; j<MAXY; ++j)
-        {
-            cout << s[i][j] << " ";
-        }
-        cout << endl;
-    }
+    cout << endl << "----------------" << endl;
+    string sql = "SELECT * FROM ASIENTOS WHERE SALA = " + to_string(salaActual) + " ORDER BY FILA, COLUMNA;";
+    sqlite3_exec(db, sql.c_str(), callback_mostrar, NULL, &mensajeError);
     cout << endl;
 }
 
-void comprar_por_filas(sala&s)
+void comprar_por_filas(int salaActual)
 {
     int fila_1, fila_2, n;
+    char* mensajeError = nullptr;
+    sala s_temp;
     bool reservado=false;
     int cnt=0;
     int cnt1=0;
+    string sql_load = "SELECT * FROM ASIENTOS WHERE SALA = " + to_string(salaActual) + ";";
+    inicializar(s_temp);
+    int rc = sqlite3_exec(db, sql_load.c_str(), callback_cargar_sala, &s_temp, &mensajeError);
+    if (rc != SQLITE_OK)
+    {
+        cout << "Error al Cargar Datos: " << mensajeError << endl;
+        sqlite3_free(mensajeError);
+        return;
+    }
     do
     {
         cout << endl;
@@ -145,24 +216,46 @@ void comprar_por_filas(sala&s)
         for(int j=0; (j<MAXY)&&(reservado==false); ++j)
         {
 
-            if(s[i][j]=='o')
+            if(s_temp[i][j]=='o')
             {
                 ++cnt;
                 if(cnt==n)
                 {
-                    cout << "Reservado!" << endl;
                     cout << endl;
                     reservado=true;
-                    do
+                    if(cnt == n)
                     {
-                        s[i][cnt1]='x';
-                        --cnt1;
-                        --cnt;
+                        int rc = sqlite3_exec(db, "BEGIN TRANSACTION;", NULL, 0, &mensajeError);
+                        if (rc != SQLITE_OK)
+                        {
+                            cout << "Error al Iniciar Transaccion: " << mensajeError << endl;
+                            sqlite3_free(mensajeError);
+                            break;
+                        }
+                        for(int k = j; k > j - n; --k)
+                        {
+                            string sql_upd = "UPDATE ASIENTOS SET ESTADO = 'x' WHERE SALA = " + to_string(salaActual) + " AND FILA = " + to_string(i) + " AND COLUMNA = " + to_string(k) + ";";
+                            rc = sqlite3_exec(db, sql_upd.c_str(), NULL, 0, &mensajeError);
+                            if (rc != SQLITE_OK)
+                            {
+                                cout << "Error al Actualizar Asiento: " << mensajeError << endl;
+                                sqlite3_free(mensajeError);
+                                break;
+                            }
+                        }
+                        rc = sqlite3_exec(db, "END TRANSACTION;", NULL, 0, &mensajeError);
+                        if (rc != SQLITE_OK)
+                        {
+                            cout << "Error al Guardar Cambios: " << mensajeError << endl;
+                            sqlite3_free(mensajeError);
+                            break;
+                        }
+                        reservado = true;
+                        cout << "Reserva de " << n << " asientos realizada!" << endl;
                     }
-                    while(cnt!=0);
                 }
             }
-            else if(s[i][j]=='x')
+            else if(s_temp[i][j]=='x')
             {
                 cnt=0;
             }
@@ -173,54 +266,56 @@ void comprar_por_filas(sala&s)
     {
         cout << "No quedan " << n << " sitios libres entre esas filas" << endl;
     }
-    mostrar(s);
+    mostrar(salaActual);
 }
 
-
-void comprar_por_asiento(sala&s)
+void comprar_por_asiento(int salaActual)
 {
-    bool ocupado=false;
     int nasientos, fil, col;
-    do
-    {
-        cout << endl;
-        cout << "Cuantos asientos desea: ";
-        cin >> nasientos;
-    }
-    while ((nasientos<1)||(nasientos>35));
+    char* mensajeError = nullptr;
+    cout << "Cuantos asientos desea: ";
+    cin >> nasientos;
+    cout << endl;
 
-    for(int i=0; i<nasientos; ++i)
+    for(int i = 0; i < nasientos; i++)
     {
-        ocupado=false;
-        do
+        bool exito = false;
+        while(!exito)
         {
-            cout << endl;
-            cout << "En que fila y columa quieres tu asiento (uno de ellos): ";
+            cout << "Asiento " << i + 1 << " - Fila y Columna: ";
             cin >> fil >> col;
-        }
-        while((fil<0)||(fil>4)||(col<0)||(col>6));
 
-        while(ocupado==false)
-        {
-            if(s[fil][col]=='o')
+            if(fil < 0 || fil > 4 || col < 0 || col > 6)
             {
-                s[fil][col]='x';
+                cout << "Coordenadas invalidas." << endl;
+                cout << endl;
+                continue;
+            }
+
+            string sql = "UPDATE ASIENTOS SET ESTADO = 'x' WHERE SALA = " + to_string(salaActual) + " AND FILA = " + to_string(fil) + " AND COLUMNA = " + to_string(col) + " AND ESTADO = 'o';";
+            int rc = sqlite3_exec(db, sql.c_str(), NULL, 0, &mensajeError);
+            if (rc != SQLITE_OK)
+            {
+                cout << "Error al Comprar Asiento: " << mensajeError << endl;
+                sqlite3_free(mensajeError);
+            }
+            else if (sqlite3_changes(db) > 0)
+            {
                 cout << "Reservado!" << endl;
                 cout << endl;
-                mostrar(s);
-                ocupado=true;
+                exito = true;
             }
             else
             {
-                cout << "El asiento esta ocupado." << endl;
-                cout << "Elige otro asiento: ";
-                cin >> fil >> col;
+                cout << "Asiento ocupado. Elige otro." << endl;
+                cout << endl;
             }
         }
     }
+    mostrar(salaActual);
 }
 
-void comprar_tickets(sala&s)
+void comprar_tickets(int salaActual)
 {
     char c;
     cout << "Como quieres elegir las entradas (A = Por Fila, B = Por Asiento): ";
@@ -230,10 +325,10 @@ void comprar_tickets(sala&s)
         switch (c)
         {
         case 'A':
-            comprar_por_filas(s);
+            comprar_por_filas(salaActual);
             break;
         case 'B':
-            comprar_por_asiento(s);
+            comprar_por_asiento(salaActual);
             break;
         default:
             cout << "Elige una opcion correcta." << endl;
@@ -245,66 +340,77 @@ void comprar_tickets(sala&s)
     while((c!='A')&&(c!='B'));
 }
 
-void cancelar_tickets(sala&s)
+void cancelar_tickets(int salaActual)
 {
     int fila,columna;
+    char* mensajeError = nullptr;
     do
     {
         cout << endl;
-        cout << "En que fila y columna esta el asiento que quieres cancelar: ";
+        cout << "Fila (0-4) y columna (0-6) a cancelar: ";
         cin >> fila >> columna;
     }
     while((fila<0)||(fila>4)||(columna<0)||(columna>6));
-    if(s[fila][columna]=='o')
+    string sql = "UPDATE ASIENTOS SET ESTADO = 'o' WHERE SALA = " + to_string(salaActual) + " AND FILA = " + to_string(fila) + " AND COLUMNA = " + to_string(columna) + " AND ESTADO = 'x';";
+    int rc = sqlite3_exec(db, sql.c_str(), NULL, 0, &mensajeError);
+    if (rc != SQLITE_OK)
     {
-        cout << "Ese asiento esta libre." << endl;
+        cout << "Error al Cancelar Reserva: " << mensajeError << endl;
+        sqlite3_free(mensajeError);
+    }
+    else if (sqlite3_changes(db) > 0)
+    {
+        cout << "Reserva cancelada con Exito." << endl;
         cout << endl;
     }
     else
     {
-        s[fila][columna]='o';
-        cout << "Reserva Cancelada." << endl;
-        cout << endl;
+        cout << "Ese asiento ya estaba libre o no existe." << endl;
+        cancelar_tickets(salaActual);
     }
 }
 
 int main()
 {
+    cout << "Mensajes del Sistema:" << endl;
+    creardatabase();
+    inicializarAsientos();
     Introduccion();
-    sala s1, s2, s3, s4, s5, s6;
-    inicializar(s1);
-    inicializar(s2);
-    inicializar(s3);
-    inicializar(s4);
-    inicializar(s5);
-    inicializar(s6);
-    sala* s = elegir_sala(s1, s2, s3, s4, s5, s6);
-    cout << endl;
+    int salaActual = 1;
     char c;
     while(1)
     {
-        cout << "Que desea Hacer (A = Comprar, B = Cancelar, C = Ver sala, D = Cambiar Sala, E = Cancelar): ";
+        cout << "Sala Seleccionada: " << salaActual << endl;
+        cout << "Que desea Hacer (A = Comprar, B = Cancelar, C = Ver sala, D = Cambiar Sala, E = Salir): ";
         cin >> c;
         switch (c)
         {
         case 'A':
             cout << endl;
-            comprar_tickets(*s);
+            comprar_tickets(salaActual);
             break;
         case 'B':
-            cancelar_tickets(*s);
+            cancelar_tickets(salaActual);
             break;
         case 'C':
-            cout << endl;
-            mostrar(*s);
+            cout << endl << "Sala Actual: " << salaActual << endl;
+            mostrar(salaActual);
             break;
         case 'D':
+            cout << "A que sala quieres cambiar (1-6): ";
+            cin >> salaActual;
             cout << endl;
-            s = elegir_sala(s1, s2, s3, s4, s5, s6);
+            if(salaActual < 1 || salaActual > 6)
+            {
+                cout << "Sala invalida, volviendo a sala 1." << endl;
+                cout << endl;
+                salaActual = 1;
+            }
             break;
         case 'E':
             cout << endl;
             cout << "Programa Finalizado." << endl;
+            sqlite3_close(db);
             return 0;
             break;
         default:
