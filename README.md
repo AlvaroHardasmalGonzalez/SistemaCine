@@ -17,7 +17,9 @@ Este programa implementa un sistema integral de gestión de entradas para un cin
 
 *COMPRAR*
  - Dos modos de compra:
+   
    A) Por filas: El sistema busca un bloque contiguo de asientos libres dentro de un rango de filas.
+
    B) Por asiento: Selección manual mediante coordenadas exactas de fila y columna.
 
 *CANCELAR*
@@ -28,7 +30,7 @@ Este programa implementa un sistema integral de gestión de entradas para un cin
  - 1. Resetear asientos: Vacía por completo todos los asientos de una sala elegida.
  - 2. Abrir/Cerrar Sala: Permite bloquear una sala por mantenimiento, impidiendo ventas.
  - 3. Revisar Ingresos: Calcula la recaudación total basada en los asientos vendidos (Precio: 5.50 eur).
- - 4. Actualizar Película: Permite cambiar el título del filme proyectado en cada sala.
+ - 4. Actualizar Película: Permite cambiar el título de la película proyectada en cada sala.
 
 *RESTRICCIONES Y VALIDACIONES*
  - Seguridad: Solo se puede acceder al Menú Admin con la clave correcta almacenada en la base de datos.
