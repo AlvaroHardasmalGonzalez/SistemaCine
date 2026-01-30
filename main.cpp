@@ -11,6 +11,7 @@ sqlite3* db;
 
 typedef array<array<char, MAXY>, MAXX> sala;
 
+// Crea las tablas necesarias (ASIENTOS, PELICULAS, CONFIG, ESTADO_SALAS) e inicializa valores por defecto
 void creardatabase()
 {
     char* mensajeError = nullptr;
@@ -22,6 +23,13 @@ void creardatabase()
     else
     {
         cout << "Base de datos abierta correctamente." << endl;
+    }
+    string sqlPelis = "CREATE TABLE IF NOT EXISTS PELICULAS (SALA INT PRIMARY KEY, NOMBRE TEXT);";
+    sqlite3_exec(db, sqlPelis.c_str(), NULL, 0, &mensajeError);
+    for(int i = 1; i <= 6; i++)
+    {
+        string sqlInit = "INSERT OR IGNORE INTO PELICULAS (SALA, NOMBRE) VALUES (" + to_string(i) + ", 'Pelicula por definir');";
+        sqlite3_exec(db, sqlInit.c_str(), NULL, 0, NULL);
     }
     string sqlSalas = "CREATE TABLE IF NOT EXISTS ESTADO_SALAS (SALA INT PRIMARY KEY, ABIERTA INT);";
     sqlite3_exec(db, sqlSalas.c_str(), NULL, 0, &mensajeError);
@@ -58,6 +66,7 @@ void creardatabase()
     }
 }
 
+// Callback para recuperar la contraseña de la tabla CONFIG
 int callback_password(void* data, int argc, char** argv, char** azColName)
 {
     string* pass = (string*)data;
@@ -68,6 +77,7 @@ int callback_password(void* data, int argc, char** argv, char** azColName)
     return 0;
 }
 
+// Callback para mapear los resultados de la DB a una matriz tipo 'sala' en C++
 int callback_cargar_sala(void* data, int argc, char** argv, char** azColName)
 {
     sala* s = (sala*)data;
@@ -78,6 +88,7 @@ int callback_cargar_sala(void* data, int argc, char** argv, char** azColName)
     return 0;
 }
 
+// Callback genérico para recibir un número entero (usado para conteos de filas o asientos)
 int callback_conteo(void* data, int argc, char** argv, char** azColName)
 {
     int* filas = (int*)data;
@@ -88,6 +99,31 @@ int callback_conteo(void* data, int argc, char** argv, char** azColName)
     return 0;
 }
 
+// Callback para imprimir los asientos en consola con formato de filas y columnas
+int callback_mostrar(void* data, int argc, char** argv, char** azColName)
+{
+    int col = stoi(argv[2]);
+    if (col == 0)
+    {
+        cout << argv[1] << ": ";
+    }
+    cout << argv[3] << " ";
+    if (col == 6)
+    {
+        cout << endl;
+    }
+    return 0;
+}
+
+// Callback para capturar el nombre de la película desde la base de datos
+int callback_peli(void* data, int argc, char** argv, char** azColName)
+{
+    string* nombre = (string*)data;
+    if (argv[0]) *nombre = argv[0];
+    return 0;
+}
+
+// Si la tabla ASIENTOS está vacía, genera los 210 asientos (6 salas x 35 asientos) con estado 'o' (libre)
 void inicializarAsientos()
 {
     int conteo = 0;
@@ -128,21 +164,7 @@ void inicializarAsientos()
     }
 }
 
-int callback_mostrar(void* data, int argc, char** argv, char** azColName)
-{
-    int col = stoi(argv[2]);
-    if (col == 0)
-    {
-        cout << argv[1] << ": ";
-    }
-    cout << argv[3] << " ";
-    if (col == 6)
-    {
-        cout << endl;
-    }
-    return 0;
-}
-
+// Muestra el encabezado visual del programa
 void Introduccion()
 {
     cout << endl;
@@ -152,6 +174,7 @@ void Introduccion()
     cout << "=============================================" << endl << endl;
 }
 
+// Llena una matriz 'sala' con caracteres 'o' (utilizado para resets temporales en memoria)
 void inicializar(sala&s)
 {
     for(int i=0; i<MAXX; ++i)
@@ -163,6 +186,7 @@ void inicializar(sala&s)
     }
 }
 
+// Consulta la base de datos y dibuja el plano de asientos de la sala seleccionada
 void mostrar(int salaActual)
 {
     char* mensajeError = nullptr;
@@ -177,6 +201,7 @@ void mostrar(int salaActual)
     cout << endl;
 }
 
+// Busca un grupo de asientos contiguos libres dentro de un rango de filas específico
 void comprar_por_filas(int salaActual)
 {
     int fila_1, fila_2, n;
@@ -268,6 +293,7 @@ void comprar_por_filas(int salaActual)
     mostrar(salaActual);
 }
 
+// Permite al usuario elegir asientos específicos uno por uno indicando fila y columna
 void comprar_por_asiento(int salaActual)
 {
     int nasientos, fil, col;
@@ -314,6 +340,7 @@ void comprar_por_asiento(int salaActual)
     mostrar(salaActual);
 }
 
+// Submenú para elegir el método de compra (por filas o por asiento individual)
 void comprar_tickets(int salaActual)
 {
     char c;
@@ -339,6 +366,7 @@ void comprar_tickets(int salaActual)
     while((c!='A')&&(c!='B'));
 }
 
+// Cambia el estado de un asiento de 'x' (reservado) a 'o' (libre) en la base de datos
 void cancelar_tickets(int salaActual)
 {
     int fila,columna;
@@ -369,6 +397,7 @@ void cancelar_tickets(int salaActual)
     }
 }
 
+// Borra todas las reservas de una sala específica poniendo todos sus asientos en 'o'
 void reset_asientos()
 {
     int salaAResetear;
@@ -400,6 +429,7 @@ void reset_asientos()
     }
 }
 
+// Verifica en la tabla ESTADO_SALAS si una sala está habilitada para la venta
 bool esta_sala_abierta(int salaId)
 {
     int abierta = 1; // Por defecto abierta
@@ -415,6 +445,7 @@ bool esta_sala_abierta(int salaId)
     return abierta == 1;
 }
 
+// Permite al administrador bloquear (0) o abrir (1) el acceso a una sala
 void gestionar_bloqueo_sala()
 {
     int salaId, nuevoEstado;
@@ -430,11 +461,50 @@ void gestionar_bloqueo_sala()
     }
 }
 
+// Calcula el dinero recaudado multiplicando los asientos con estado 'x' por el precio de la entrada
 void revisar_ingresos()
 {
-
+    int ocupados = 0;
+    char* mensajeError = nullptr;
+    double precioEntrada = 5.50;
+    string sql = "SELECT COUNT(*) FROM ASIENTOS WHERE ESTADO = 'x';";
+    int rc = sqlite3_exec(db, sql.c_str(), callback_conteo, &ocupados, &mensajeError);
+    if (rc != SQLITE_OK)
+    {
+        cout << "Error al consultar ingresos: " << mensajeError << endl;
+        sqlite3_free(mensajeError);
+    }
+    else
+    {
+        double ingresosTotales = ocupados * precioEntrada;
+        cout << endl;
+        cout << "=============================================" << endl;
+        cout << "           REPORTE DE INGRESOS" << endl;
+        cout << "=============================================" << endl;
+        cout << " Asientos vendidos (totales): " << ocupados << endl;
+        cout << " Precio por asiento:         " << precioEntrada << " eur" << endl;
+        cout << "---------------------------------------------" << endl;
+        cout << " INGRESOS TOTALES:           " << ingresosTotales << " eur" << endl;
+        cout << "=============================================" << endl;
+    }
 }
 
+// Actualiza el nombre de la película proyectada en una sala determinada
+void cambiar_pelicula() {
+    int numSala;
+    string nuevoNombre;
+    cout << "Ingrese el numero de sala (1-6): ";
+    cin >> numSala;
+    cin.ignore(); // Limpiar el buffer para usar getline
+    cout << "Ingrese el nuevo nombre de la pelicula: ";
+    getline(cin, nuevoNombre);
+    string sql = "UPDATE PELICULAS SET NOMBRE = '" + nuevoNombre + "' WHERE SALA = " + to_string(numSala) + ";";
+    if (sqlite3_exec(db, sql.c_str(), NULL, 0, NULL) == SQLITE_OK) {
+        cout << "Cartelera actualizada con exito." << endl;
+    }
+}
+
+// Panel de control protegido por contraseña para gestionar la configuración del cine
 void menu_admin()
 {
     string password_db = "";
@@ -453,7 +523,8 @@ void menu_admin()
         cout << "1. Resetear todos los asientos" << endl;
         cout << "2. Abrir/Cerrar Sala" << endl;
         cout << "3. Revisar Ingresos" << endl;
-        cout << "4. Salir" << endl << endl;
+        cout << "4. Actualizar Pelicula" << endl;
+        cout << "5. Salir" << endl << endl;
         cout << "Elige una opcion: ";
         cin >> c;
         switch (c)
@@ -478,6 +549,9 @@ void menu_admin()
             revisar_ingresos();
             break;
         case '4':
+            cambiar_pelicula();
+            break;
+        case '5':
             break;
         default:
             cout << "Opcion incorrecta, saliendo del menu de admin." << endl;
@@ -490,6 +564,16 @@ void menu_admin()
     }
 }
 
+// Recupera el nombre de la película de una sala para mostrarlo en el menú principal
+string obtener_nombre_peli(int salaActual)
+{
+    string nombre = "";
+    string sql = "SELECT NOMBRE FROM PELICULAS WHERE SALA = " + to_string(salaActual) + ";";
+    sqlite3_exec(db, sql.c_str(), callback_peli, &nombre, NULL);
+    return nombre;
+}
+
+// Inicializacion de tablas y bucle del menú principal
 int main()
 {
     cout << "Mensajes del Sistema:" << endl;
@@ -500,7 +584,10 @@ int main()
     char c;
     while(1)
     {
-        cout << "Sala Seleccionada: " << salaActual << endl;
+        string peliActual = obtener_nombre_peli(salaActual);
+        cout << "---------------------------------------------" << endl;
+        cout << "SALA: " << salaActual << " | PELICULA: " << peliActual << endl;
+        cout << "---------------------------------------------" << endl;
         cout << "Menu Principal:" << endl;
         cout << "1. Comprar" << endl;
         cout << "2. Cancelar" << endl;
