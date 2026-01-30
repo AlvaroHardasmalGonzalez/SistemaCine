@@ -13,6 +13,7 @@ typedef array<array<char, MAXY>, MAXX> sala;
 
 void creardatabase()
 {
+    char* mensajeError = nullptr;
     int salida = sqlite3_open("cine.db", &db);
     if(salida != SQLITE_OK)
     {
@@ -22,18 +23,49 @@ void creardatabase()
     {
         cout << "Base de datos abierta correctamente." << endl;
     }
+    string sqlSalas = "CREATE TABLE IF NOT EXISTS ESTADO_SALAS (SALA INT PRIMARY KEY, ABIERTA INT);";
+    sqlite3_exec(db, sqlSalas.c_str(), NULL, 0, &mensajeError);
+    for(int i = 1; i <= 6; i++)
+    {
+        string sqlInit = "INSERT OR IGNORE INTO ESTADO_SALAS (SALA, ABIERTA) VALUES (" + to_string(i) + ", 1);";
+        sqlite3_exec(db, sqlInit.c_str(), NULL, 0, NULL);
+    }
     string sql = R"(CREATE TABLE IF NOT EXISTS ASIENTOS(SALA INT NOT NULL, FILA INT NOT NULL, COLUMNA INT NOT NULL, ESTADO CHAR(1) NOT NULL, PRIMARY KEY (SALA, FILA, COLUMNA)))";
-    char* mensajeError;
     int rc = sqlite3_exec(db, sql.c_str(), NULL, 0, &mensajeError);
 
     if (rc != SQLITE_OK)
     {
-        cerr << "Error al crear la tabla: " << mensajeError << endl;
+        cout << "Error al crear la tabla: " << mensajeError << endl;
+        sqlite3_free(mensajeError);
     }
     else
     {
-        cout << "Tabla verificada/creada con éxito" << endl;
+        cout << "Tabla verificada/creada con exito" << endl;
     }
+    string sqlAdmin = "CREATE TABLE IF NOT EXISTS CONFIG (ID INT PRIMARY KEY, CLAVE TEXT);";
+    rc = sqlite3_exec(db, sqlAdmin.c_str(), NULL, 0, &mensajeError);
+    if (rc != SQLITE_OK)
+    {
+        cout << "Error al crear la tabla: " << mensajeError << endl;
+        sqlite3_free(mensajeError);
+    }
+    string sqlInsert = "INSERT OR IGNORE INTO CONFIG (ID, CLAVE) VALUES (1, 'admin123');";
+    rc = sqlite3_exec(db, sqlInsert.c_str(), NULL, 0, &mensajeError);
+    if (rc != SQLITE_OK)
+    {
+        cout << "Error al crear la tabla: " << mensajeError << endl;
+        sqlite3_free(mensajeError);
+    }
+}
+
+int callback_password(void* data, int argc, char** argv, char** azColName)
+{
+    string* pass = (string*)data;
+    if (argv[0])
+    {
+        *pass = argv[0];
+    }
+    return 0;
 }
 
 int callback_cargar_sala(void* data, int argc, char** argv, char** azColName)
@@ -118,39 +150,6 @@ void Introduccion()
     cout << "      SISTEMA DE GESTION DE ENTRADAS" << endl;
     cout << "                 DEL CINE" << endl;
     cout << "=============================================" << endl << endl;
-    cout << "SALAS DISPONIBLES" << endl;
-    cout << " - Se gestionan 6 salas (1 a 6)." << endl;
-    cout << " - Cada sala tiene 5 filas (0-4) y 7 columnas (0-6)." << endl << endl;
-    cout << "MENU PRINCIPAL" << endl;
-    cout << " A) Comprar" << endl;
-    cout << " B) Cancelar" << endl;
-    cout << " C) Ver sala" << endl;
-    cout << " D) Cambiar sala" << endl;
-    cout << " E) Salir" << endl << endl;
-    cout << "COMPRAR" << endl;
-    cout << " - Dos modos de compra:" << endl;
-    cout << "   A) Por filas: elegir rango de filas [0-4] y cantidad (1-35)." << endl;
-    cout << "      El sistema busca un bloque contiguo de asientos libres" << endl;
-    cout << "      dentro del rango indicado y lo reserva si existe." << endl;
-    cout << "   B) Por asiento: indicar fila [0-4] y columna [0-6] para cada asiento." << endl;
-    cout << "      Si el asiento esta libre, se reserva; si esta ocupado," << endl;
-    cout << "      se solicita otro." << endl << endl;
-    cout << "CANCELAR" << endl;
-    cout << " - Indicar fila [0-4] y columna [0-6]." << endl;
-    cout << " - Si el asiento estaba reservado, se libera;" << endl;
-    cout << "   si estaba libre, se informa al usuario." << endl << endl;
-    cout << "VER SALA" << endl;
-    cout << " - Muestra el plano con columnas 0-6 y filas 0-4." << endl;
-    cout << " - 'o' = libre, 'x' = reservado." << endl << endl;
-    cout << "CAMBIAR SALA" << endl;
-    cout << " - Permite seleccionar otra sala (1 a 6)." << endl;
-    cout << " - Si la opcion es invalida, se usa la sala 1 por defecto." << endl << endl;
-    cout << "RESTRICCIONES Y VALIDACIONES" << endl;
-    cout << " - Filas validas: 0 a 4." << endl;
-    cout << " - Columnas validas: 0 a 6." << endl;
-    cout << " - Cantidad de asientos: 1 a 35." << endl;
-    cout << " - Si se introducen valores invalidos, se solicitan nuevamente." << endl << endl;
-    cout << "-----------------------------------------------------------------------------" << endl << endl;
 }
 
 void inicializar(sala&s)
@@ -370,6 +369,127 @@ void cancelar_tickets(int salaActual)
     }
 }
 
+void reset_asientos()
+{
+    int salaAResetear;
+    char* mensajeError = nullptr;
+    cout << "Que sala desea resetear completamente? (1-6): ";
+    cin >> salaAResetear;
+    if (salaAResetear < 1 || salaAResetear > 6)
+    {
+        cout << "Error: Sala no valida. Operacion cancelada." << endl;
+        return;
+    }
+    string sql = "UPDATE ASIENTOS SET ESTADO = 'o' WHERE SALA = " + to_string(salaAResetear) + ";";
+    int rc = sqlite3_exec(db, sql.c_str(), NULL, 0, &mensajeError);
+    if (rc != SQLITE_OK)
+    {
+        cout << "Error al resetear la sala: " << mensajeError << endl;
+        sqlite3_free(mensajeError);
+    }
+    else
+    {
+        if (sqlite3_changes(db) > 0)
+        {
+            cout << "SALA " << salaAResetear << " ha sido reseteada con exito. Todos los asientos estan libres." << endl;
+        }
+        else
+        {
+            cout << "La sala ya estaba vacía o no se encontraron asientos." << endl;
+        }
+    }
+}
+
+bool esta_sala_abierta(int salaId)
+{
+    int abierta = 1; // Por defecto abierta
+    string sql = "SELECT ABIERTA FROM ESTADO_SALAS WHERE SALA = " + to_string(salaId) + ";";
+
+    sqlite3_stmt* stmt;
+    sqlite3_prepare_v2(db, sql.c_str(), -1, &stmt, NULL);
+    if (sqlite3_step(stmt) == SQLITE_ROW)
+    {
+        abierta = sqlite3_column_int(stmt, 0);
+    }
+    sqlite3_finalize(stmt);
+    return abierta == 1;
+}
+
+void gestionar_bloqueo_sala()
+{
+    int salaId, nuevoEstado;
+    cout << "Que sala quieres gestionar (1-6)?: ";
+    cin >> salaId;
+    cout << "Qu quieres hacer? (0 = Bloquear, 1 = Abrir): ";
+    cin >> nuevoEstado;
+
+    string sql = "UPDATE ESTADO_SALAS SET ABIERTA = " + to_string(nuevoEstado) + " WHERE SALA = " + to_string(salaId) + ";";
+    if (sqlite3_exec(db, sql.c_str(), NULL, 0, NULL) == SQLITE_OK)
+    {
+        cout << "Sala " << salaId << (nuevoEstado == 0 ? " BLOQUEADA" : " ABIERTA") << " con exito." << endl;
+    }
+}
+
+void revisar_ingresos()
+{
+
+}
+
+void menu_admin()
+{
+    string password_db = "";
+    char c;
+    char* mensajeError = nullptr;
+    string sql = "SELECT CLAVE FROM CONFIG WHERE ID = 1;";
+    sqlite3_exec(db, sql.c_str(), callback_password, &password_db, &mensajeError);
+    string intento_usuario;
+    cout << endl;
+    cout << "Ingrese clave de administrador: ";
+    cin >> intento_usuario;
+    if (intento_usuario == password_db)
+    {
+        cout << endl;
+        cout << "ACCESO TOTAL CONCEDIDO" << endl;
+        cout << "1. Resetear todos los asientos" << endl;
+        cout << "2. Abrir/Cerrar Sala" << endl;
+        cout << "3. Revisar Ingresos" << endl;
+        cout << "4. Salir" << endl << endl;
+        cout << "Elige una opcion: ";
+        cin >> c;
+        switch (c)
+        {
+        case '1':
+            char confirmar;
+            cout << "ESTA SEGURO? Esta accion no se puede deshacer (S/N): ";
+            cin >> confirmar;
+            if (confirmar == 'S' || confirmar == 's')
+            {
+                reset_asientos();
+            }
+            else
+            {
+                cout << "Operacion cancelada." << endl;
+            }
+            break;
+        case '2':
+            gestionar_bloqueo_sala();
+            break;
+        case '3':
+            revisar_ingresos();
+            break;
+        case '4':
+            break;
+        default:
+            cout << "Opcion incorrecta, saliendo del menu de admin." << endl;
+            break;
+        }
+    }
+    else
+    {
+        cout << "Error: Clave incorrecta." << endl;
+    }
+}
+
 int main()
 {
     cout << "Mensajes del Sistema:" << endl;
@@ -381,22 +501,37 @@ int main()
     while(1)
     {
         cout << "Sala Seleccionada: " << salaActual << endl;
-        cout << "Que desea Hacer (A = Comprar, B = Cancelar, C = Ver sala, D = Cambiar Sala, E = Salir): ";
+        cout << "Menu Principal:" << endl;
+        cout << "1. Comprar" << endl;
+        cout << "2. Cancelar" << endl;
+        cout << "3. Ver Sala" << endl;
+        cout << "4. Cambiar Sala" << endl;
+        cout << "5. Menu Admin" << endl;
+        cout << "6. Salir" << endl << endl;
+        cout << "Elige una opcion: ";
         cin >> c;
         switch (c)
         {
-        case 'A':
+        case '1':
             cout << endl;
-            comprar_tickets(salaActual);
+            if (!esta_sala_abierta(salaActual))
+            {
+                cout << "ERROR! La sala " << salaActual << " esta cerrada por mantenimiento." << endl;
+            }
+            else
+            {
+                comprar_tickets(salaActual);
+            }
             break;
-        case 'B':
+            break;
+        case '2':
             cancelar_tickets(salaActual);
             break;
-        case 'C':
+        case '3':
             cout << endl << "Sala Actual: " << salaActual << endl;
             mostrar(salaActual);
             break;
-        case 'D':
+        case '4':
             cout << "A que sala quieres cambiar (1-6): ";
             cin >> salaActual;
             cout << endl;
@@ -407,7 +542,12 @@ int main()
                 salaActual = 1;
             }
             break;
-        case 'E':
+        case '5':
+            menu_admin();
+            cout << endl;
+
+            break;
+        case '6':
             cout << endl;
             cout << "Programa Finalizado." << endl;
             sqlite3_close(db);
