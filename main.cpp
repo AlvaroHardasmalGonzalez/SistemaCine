@@ -63,7 +63,7 @@ void creardatabase()
         cout << "Error al inicializar la tabla de Admin: " << mensajeError << endl;
         sqlite3_free(mensajeError);
     }
-    string sql = R"(CREATE TABLE IF NOT EXISTS ASIENTOS(SALA INT NOT NULL, FILA INT NOT NULL, COLUMNA INT NOT NULL, ESTADO CHAR(1) NOT NULL, PRIMARY KEY (SALA, FILA, COLUMNA)))"; // TABLA ASIENTOS
+    string sql = R"(CREATE TABLE IF NOT EXISTS ASIENTOS(SALA INT NOT NULL, HORA TEXT NOT NULL, FILA INT NOT NULL, COLUMNA INT NOT NULL, ESTADO CHAR(1) NOT NULL, PRIMARY KEY (SALA, HORA, FILA, COLUMNA)))"; // TABLA ASIENTOS
     rc = sqlite3_exec(db, sql.c_str(), NULL, 0, &mensajeError);
     if (rc != SQLITE_OK)
     {
@@ -112,12 +112,12 @@ int callback_conteo(void* data, int argc, char** argv, char** azColName)
 // Callback para imprimir los asientos en consola con formato de filas y columnas
 int callback_mostrar(void* data, int argc, char** argv, char** azColName)
 {
-    int col = stoi(argv[2]);
+    int col = stoi(argv[3]);
     if (col == 0)
     {
-        cout << argv[1] << ": ";
+        cout << argv[2] << ": ";
     }
-    cout << argv[3] << " ";
+    cout << argv[4] << " ";
     if (col == 6)
     {
         cout << endl;
@@ -138,6 +138,7 @@ void inicializarAsientos()
 {
     int conteo = 0;
     char* mensajeError = nullptr;
+    string horarios[] = {"17:00", "20:00", "22:30"};
     int rc = sqlite3_exec(db, "SELECT COUNT(*) FROM ASIENTOS;", callback_conteo, &conteo, &mensajeError);
     if (rc != SQLITE_OK)
     {
@@ -152,14 +153,18 @@ void inicializarAsientos()
 
         for (int s = 1; s <= 6; s++)
         {
-            for (int f = 0; f < MAXX; f++)
+            for(const string& h : horarios)
             {
-                for (int c = 0; c < MAXY; c++)
+                for (int f = 0; f < MAXX; f++)
                 {
-                    string sql = "INSERT INTO ASIENTOS VALUES (" + to_string(s) + "," + to_string(f) + "," + to_string(c) + ", 'o');";
-                    sqlite3_exec(db, sql.c_str(), NULL, 0, NULL);
+                    for (int c = 0; c < MAXY; c++)
+                    {
+                        string sql = "INSERT INTO ASIENTOS VALUES (" + to_string(s) + ",'" + h + "'," + to_string(f) + "," + to_string(c) + ", 'o');";
+                        sqlite3_exec(db, sql.c_str(), NULL, 0, NULL);
+                    }
                 }
             }
+
         }
         sqlite3_exec(db, "END TRANSACTION;", NULL, 0, NULL);
         cout << "Cine inicializado con exito." << endl;
@@ -193,7 +198,7 @@ void inicializar(sala&s)
 }
 
 // Consulta la base de datos y dibuja el plano de asientos de la sala seleccionada
-void mostrar(int salaActual)
+void mostrar(int salaActual, string horaActual)
 {
     char* mensajeError = nullptr;
     cout << "   ";
@@ -202,13 +207,13 @@ void mostrar(int salaActual)
         cout << k << " ";
     }
     cout << endl << "----------------" << endl;
-    string sql = "SELECT * FROM ASIENTOS WHERE SALA = " + to_string(salaActual) + " ORDER BY FILA, COLUMNA;";
+    string sql = "SELECT * FROM ASIENTOS WHERE SALA = " + to_string(salaActual) + " AND HORA = '" + horaActual + "' ORDER BY FILA, COLUMNA;";
     sqlite3_exec(db, sql.c_str(), callback_mostrar, NULL, &mensajeError);
     cout << endl;
 }
 
 // Busca un grupo de asientos contiguos libres dentro de un rango de filas específico
-void comprar_por_filas(int salaActual)
+void comprar_por_filas(int salaActual, string horaActual)
 {
     int fila_1, fila_2, n;
     char* mensajeError = nullptr;
@@ -216,7 +221,7 @@ void comprar_por_filas(int salaActual)
     bool reservado=false;
     int cnt=0;
     int cnt1=0;
-    string sql_load = "SELECT * FROM ASIENTOS WHERE SALA = " + to_string(salaActual) + ";";
+    string sql_load = "SELECT * FROM ASIENTOS WHERE SALA = " + to_string(salaActual) + " AND HORA = '" + horaActual + "';";
     inicializar(s_temp);
     int rc = sqlite3_exec(db, sql_load.c_str(), callback_cargar_sala, &s_temp, &mensajeError);
     if (rc != SQLITE_OK)
@@ -274,7 +279,7 @@ void comprar_por_filas(int salaActual)
                         }
                         for(int k = j; k > j - n; --k)
                         {
-                            string sql_upd = "UPDATE ASIENTOS SET ESTADO = 'x' WHERE SALA = " + to_string(salaActual) + " AND FILA = " + to_string(i) + " AND COLUMNA = " + to_string(k) + ";";
+                            string sql_upd = "UPDATE ASIENTOS SET ESTADO = 'x' WHERE SALA = " + to_string(salaActual) + " AND HORA = '" + horaActual + "' AND FILA = " + to_string(i) + " AND COLUMNA = " + to_string(k) + ";";
                             rc = sqlite3_exec(db, sql_upd.c_str(), NULL, 0, &mensajeError);
                             if (rc != SQLITE_OK)
                             {
@@ -306,11 +311,11 @@ void comprar_por_filas(int salaActual)
     {
         cout << "No quedan " << n << " sitios libres entre esas filas" << endl;
     }
-    mostrar(salaActual);
+    mostrar(salaActual, horaActual);
 }
 
 // Permite al usuario elegir asientos específicos uno por uno indicando fila y columna
-void comprar_por_asiento(int salaActual)
+void comprar_por_asiento(int salaActual, string horaActual)
 {
     int nasientos, fil, col;
     char* mensajeError = nullptr;
@@ -341,7 +346,7 @@ void comprar_por_asiento(int salaActual)
                 continue;
             }
 
-            string sql = "UPDATE ASIENTOS SET ESTADO = 'x' WHERE SALA = " + to_string(salaActual) + " AND FILA = " + to_string(fil) + " AND COLUMNA = " + to_string(col) + " AND ESTADO = 'o';";
+            string sql = "UPDATE ASIENTOS SET ESTADO = 'x' WHERE SALA = " + to_string(salaActual) + " AND HORA = '" + horaActual + "' AND FILA = " + to_string(fil) + " AND COLUMNA = " + to_string(col) + " AND ESTADO = 'o';";
             int rc = sqlite3_exec(db, sql.c_str(), NULL, 0, &mensajeError);
             if (rc != SQLITE_OK)
             {
@@ -361,11 +366,11 @@ void comprar_por_asiento(int salaActual)
             }
         }
     }
-    mostrar(salaActual);
+    mostrar(salaActual, horaActual);
 }
 
 // Submenú para elegir el método de compra (por filas o por asiento individual)
-void comprar_tickets(int salaActual)
+void comprar_tickets(int salaActual, string horaActual)
 {
     char c;
     cout << "Como quieres elegir las entradas (A = Por Fila, B = Por Asiento, C = Menu Principal): ";
@@ -375,10 +380,10 @@ void comprar_tickets(int salaActual)
         switch (c)
         {
         case 'A':
-            comprar_por_filas(salaActual);
+            comprar_por_filas(salaActual, horaActual);
             break;
         case 'B':
-            comprar_por_asiento(salaActual);
+            comprar_por_asiento(salaActual, horaActual);
             break;
         case 'C':
             cout << endl;
@@ -394,8 +399,24 @@ void comprar_tickets(int salaActual)
     while((c!='A')&&(c!='B'));
 }
 
+// Selecciona el horario de cada sala
+string seleccionar_horario()
+{
+    int opcion;
+    do
+    {
+        cout << "Seleccione horario: 1. 17:00 | 2. 20:00 | 3. 22:30 : ";
+        cin >> opcion;
+    }
+    while((opcion!=1)&&(opcion!=2)&&(opcion!=3));
+    cout << endl;
+    if (opcion == 1) return "17:00";
+    if (opcion == 2) return "20:00";
+    if (opcion == 3) return "22:30";
+}
+
 // Cambia el estado de un asiento de 'x' (reservado) a 'o' (libre) en la base de datos
-void cancelar_tickets(int salaActual)
+void cancelar_tickets(int salaActual, string horaActual)
 {
     int fila,columna;
     char* mensajeError = nullptr;
@@ -411,7 +432,7 @@ void cancelar_tickets(int salaActual)
         }
     }
     while((fila<0)||(fila>4)||(columna<0)||(columna>6));
-    string sql = "UPDATE ASIENTOS SET ESTADO = 'o' WHERE SALA = " + to_string(salaActual) + " AND FILA = " + to_string(fila) + " AND COLUMNA = " + to_string(columna) + " AND ESTADO = 'x';";
+    string sql = "UPDATE ASIENTOS SET ESTADO = 'o' WHERE SALA = " + to_string(salaActual) + " AND HORA = '" + horaActual + "'" + " AND FILA = " + to_string(fila) + " AND COLUMNA = " + to_string(columna) + " AND ESTADO = 'x';";
     int rc = sqlite3_exec(db, sql.c_str(), NULL, 0, &mensajeError);
     if (rc != SQLITE_OK)
     {
@@ -426,7 +447,7 @@ void cancelar_tickets(int salaActual)
     else
     {
         cout << "Ese asiento ya estaba libre o no existe." << endl;
-        cancelar_tickets(salaActual);
+        cancelar_tickets(salaActual, horaActual);
     }
 }
 
@@ -434,18 +455,21 @@ void cancelar_tickets(int salaActual)
 void reset_asientos()
 {
     int salaAResetear;
+    string horaAresetear;
     char* mensajeError = nullptr;
     do
     {
         cout << "Que sala desea resetear completamente? (1-6): ";
         cin >> salaAResetear;
+        cout << endl;
         if(salaAResetear==888)
         {
             return;
         }
     }
     while((salaAResetear<1)||(salaAResetear>6));
-    string sql = "UPDATE ASIENTOS SET ESTADO = 'o' WHERE SALA = " + to_string(salaAResetear) + ";";
+    horaAresetear = seleccionar_horario();
+    string sql = "UPDATE ASIENTOS SET ESTADO = 'o' WHERE SALA = " + to_string(salaAResetear) + " AND HORA = '" + horaAresetear + "';";
     int rc = sqlite3_exec(db, sql.c_str(), NULL, 0, &mensajeError);
     if (rc != SQLITE_OK)
     {
@@ -456,11 +480,11 @@ void reset_asientos()
     {
         if (sqlite3_changes(db) > 0)
         {
-            cout << "SALA " << salaAResetear << " ha sido reseteada con exito. Todos los asientos estan libres." << endl;
+            cout << "La sala " << salaAResetear << " a las " << horaAresetear << " ha sido reseteada con exito. Todos los asientos estan libres." << endl;
         }
         else
         {
-            cout << "La sala ya estaba vacia o no se encontraron asientos." << endl;
+            cout << "La sala a las " << horaAresetear << " ya estaba vacia o no se encontraron asientos." << endl;
         }
     }
 }
@@ -611,8 +635,10 @@ void menu_admin()
         {
         case '1':
             char confirmar;
+            cout << endl;
             cout << "ESTA SEGURO? Esta accion no se puede deshacer (S/N): ";
             cin >> confirmar;
+            cout << endl;
             if (confirmar == 'S' || confirmar == 's')
             {
                 reset_asientos();
@@ -664,12 +690,14 @@ int main()
     inicializarAsientos();
     Introduccion();
     int salaActual = 1;
+    string horaActual = "17:00";
     char c;
     while(1)
     {
         string peliActual = obtener_nombre_peli(salaActual);
         cout << "---------------------------------------------" << endl;
-        cout << "SALA: " << salaActual << " | PELICULA: " << peliActual << endl;
+        cout << "SALA: " << salaActual << " | SESION: " << horaActual << endl;
+        cout << "PELICULA: " << peliActual << endl;
         cout << "---------------------------------------------" << endl;
         cout << "Menu Principal:" << endl;
         cout << "1. Comprar" << endl;
@@ -691,15 +719,15 @@ int main()
             }
             else
             {
-                comprar_tickets(salaActual);
+                comprar_tickets(salaActual, horaActual);
             }
             break;
         case '2':
-            cancelar_tickets(salaActual);
+            cancelar_tickets(salaActual, horaActual);
             break;
         case '3':
-            cout << endl << "Sala Actual: " << salaActual << endl;
-            mostrar(salaActual);
+            cout << endl << "Sala Actual: " << salaActual << " || " << "Sesion: " << horaActual << endl;
+            mostrar(salaActual, horaActual);
             break;
         case '4':
             cout << "A que sala quieres cambiar (1-6): ";
@@ -711,6 +739,7 @@ int main()
                 cout << endl;
                 salaActual = 1;
             }
+            horaActual = seleccionar_horario();
             break;
         case '5':
             menu_admin();
