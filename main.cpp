@@ -15,8 +15,8 @@ typedef array<array<char, MAXY>, MAXX> sala;
 void creardatabase()
 {
     char* mensajeError = nullptr;
-    int salida = sqlite3_open("cine.db", &db);
-    if(salida != SQLITE_OK)
+    int rc = sqlite3_open("cine.db", &db);
+    if(rc != SQLITE_OK)
     {
         cout << "Error al abrir la base de datos." << endl;
     }
@@ -24,45 +24,55 @@ void creardatabase()
     {
         cout << "Base de datos abierta correctamente." << endl;
     }
-    string sqlPelis = "CREATE TABLE IF NOT EXISTS PELICULAS (SALA INT PRIMARY KEY, NOMBRE TEXT);";
-    sqlite3_exec(db, sqlPelis.c_str(), NULL, 0, &mensajeError);
-    for(int i = 1; i <= 6; i++)
-    {
-        string sqlInit = "INSERT OR IGNORE INTO PELICULAS (SALA, NOMBRE) VALUES (" + to_string(i) + ", 'Pelicula por definir');";
-        sqlite3_exec(db, sqlInit.c_str(), NULL, 0, NULL);
-    }
-    string sqlSalas = "CREATE TABLE IF NOT EXISTS ESTADO_SALAS (SALA INT PRIMARY KEY, ABIERTA INT);";
-    sqlite3_exec(db, sqlSalas.c_str(), NULL, 0, &mensajeError);
-    for(int i = 1; i <= 6; i++)
-    {
-        string sqlInit = "INSERT OR IGNORE INTO ESTADO_SALAS (SALA, ABIERTA) VALUES (" + to_string(i) + ", 1);";
-        sqlite3_exec(db, sqlInit.c_str(), NULL, 0, NULL);
-    }
-    string sql = R"(CREATE TABLE IF NOT EXISTS ASIENTOS(SALA INT NOT NULL, FILA INT NOT NULL, COLUMNA INT NOT NULL, ESTADO CHAR(1) NOT NULL, PRIMARY KEY (SALA, FILA, COLUMNA)))";
-    int rc = sqlite3_exec(db, sql.c_str(), NULL, 0, &mensajeError);
 
+    string sqlSalas = "CREATE TABLE IF NOT EXISTS SALAS (SALA INT PRIMARY KEY, PELICULA TEXT, ABIERTA INT);"; // TABLA PELICULAS Y ESTADOS
+    rc = sqlite3_exec(db, sqlSalas.c_str(), NULL, 0, &mensajeError);
+    if(rc != SQLITE_OK)
+    {
+        cout << "Error al abrir la tabla de Estados y Peliculas." << endl;
+    }
+    else
+    {
+        cout << "Tabla de Estados y Peliculas verificada/creada con exito." << endl;
+    }
+
+    for(int i = 1; i <= 6; i++)
+    {
+        string sqlInit = "INSERT OR IGNORE INTO SALAS (SALA, PELICULA, ABIERTA) VALUES (" + to_string(i) + ", 'Pelicula por definir', 1);";
+        rc = sqlite3_exec(db, sqlInit.c_str(), NULL, 0, NULL);
+        if(rc != SQLITE_OK)
+        {
+            cout << "Error al inicializar la tabla de Estados y Peliculas." << endl;
+        }
+    }
+    string sqlAdmin = "CREATE TABLE IF NOT EXISTS CONFIG (ID INT PRIMARY KEY, CLAVE TEXT);"; // TABLA CONTRASEÑA ADMIN
+    rc = sqlite3_exec(db, sqlAdmin.c_str(), NULL, 0, &mensajeError);
     if (rc != SQLITE_OK)
     {
-        cout << "Error al crear la tabla: " << mensajeError << endl;
+        cout << "Error al crear la tabla de Admin: " << mensajeError << endl;
         sqlite3_free(mensajeError);
     }
     else
     {
-        cout << "Tabla verificada/creada con exito" << endl;
-    }
-    string sqlAdmin = "CREATE TABLE IF NOT EXISTS CONFIG (ID INT PRIMARY KEY, CLAVE TEXT);";
-    rc = sqlite3_exec(db, sqlAdmin.c_str(), NULL, 0, &mensajeError);
-    if (rc != SQLITE_OK)
-    {
-        cout << "Error al crear la tabla: " << mensajeError << endl;
-        sqlite3_free(mensajeError);
+        cout << "Tabla de Admin verificada/creada con exito." << endl;
     }
     string sqlInsert = "INSERT OR IGNORE INTO CONFIG (ID, CLAVE) VALUES (1, 'admin123');";
     rc = sqlite3_exec(db, sqlInsert.c_str(), NULL, 0, &mensajeError);
     if (rc != SQLITE_OK)
     {
-        cout << "Error al crear la tabla: " << mensajeError << endl;
+        cout << "Error al inicializar la tabla de Admin: " << mensajeError << endl;
         sqlite3_free(mensajeError);
+    }
+    string sql = R"(CREATE TABLE IF NOT EXISTS ASIENTOS(SALA INT NOT NULL, FILA INT NOT NULL, COLUMNA INT NOT NULL, ESTADO CHAR(1) NOT NULL, PRIMARY KEY (SALA, FILA, COLUMNA)))"; // TABLA ASIENTOS
+    rc = sqlite3_exec(db, sql.c_str(), NULL, 0, &mensajeError);
+    if (rc != SQLITE_OK)
+    {
+        cout << "Error al crear la tabla de Asientos: " << mensajeError << endl;
+        sqlite3_free(mensajeError);
+    }
+    else
+    {
+        cout << "Tabla de asientos verificada/creada con exito." << endl;
     }
 }
 
@@ -129,7 +139,6 @@ void inicializarAsientos()
     int conteo = 0;
     char* mensajeError = nullptr;
     int rc = sqlite3_exec(db, "SELECT COUNT(*) FROM ASIENTOS;", callback_conteo, &conteo, &mensajeError);
-
     if (rc != SQLITE_OK)
     {
         cout << "Error al contar: " << mensajeError << endl;
@@ -138,7 +147,7 @@ void inicializarAsientos()
     }
     if (conteo == 0)
     {
-        cout << "Base de datos vacía. Generando asientos por primera vez..." << endl;
+        cout << "Base de datos vacia. Generando asientos por primera vez..." << endl;
         sqlite3_exec(db, "BEGIN TRANSACTION;", NULL, 0, NULL);
 
         for (int s = 1; s <= 6; s++)
@@ -156,7 +165,7 @@ void inicializarAsientos()
             }
         }
         sqlite3_exec(db, "END TRANSACTION;", NULL, 0, NULL);
-        cout << "Cine inicializado con éxito." << endl;
+        cout << "Cine inicializado con exito." << endl;
     }
     else
     {
@@ -424,7 +433,7 @@ void reset_asientos()
         }
         else
         {
-            cout << "La sala ya estaba vacía o no se encontraron asientos." << endl;
+            cout << "La sala ya estaba vacia o no se encontraron asientos." << endl;
         }
     }
 }
@@ -433,8 +442,7 @@ void reset_asientos()
 bool esta_sala_abierta(int salaId)
 {
     int abierta = 1; // Por defecto abierta
-    string sql = "SELECT ABIERTA FROM ESTADO_SALAS WHERE SALA = " + to_string(salaId) + ";";
-
+    string sql = "SELECT ABIERTA FROM SALAS WHERE SALA = " + to_string(salaId) + ";";
     sqlite3_stmt* stmt;
     sqlite3_prepare_v2(db, sql.c_str(), -1, &stmt, NULL);
     if (sqlite3_step(stmt) == SQLITE_ROW)
@@ -451,10 +459,9 @@ void gestionar_bloqueo_sala()
     int salaId, nuevoEstado;
     cout << "Que sala quieres gestionar (1-6)?: ";
     cin >> salaId;
-    cout << "Qu quieres hacer? (0 = Bloquear, 1 = Abrir): ";
+    cout << "Que quieres hacer? (0 = Bloquear, 1 = Abrir): ";
     cin >> nuevoEstado;
-
-    string sql = "UPDATE ESTADO_SALAS SET ABIERTA = " + to_string(nuevoEstado) + " WHERE SALA = " + to_string(salaId) + ";";
+    string sql = "UPDATE SALAS SET ABIERTA = " + to_string(nuevoEstado) + " WHERE SALA = " + to_string(salaId) + ";";
     if (sqlite3_exec(db, sql.c_str(), NULL, 0, NULL) == SQLITE_OK)
     {
         cout << "Sala " << salaId << (nuevoEstado == 0 ? " BLOQUEADA" : " ABIERTA") << " con exito." << endl;
@@ -490,7 +497,8 @@ void revisar_ingresos()
 }
 
 // Actualiza el nombre de la película proyectada en una sala determinada
-void cambiar_pelicula() {
+void cambiar_pelicula()
+{
     int numSala;
     string nuevoNombre;
     cout << "Ingrese el numero de sala (1-6): ";
@@ -498,8 +506,9 @@ void cambiar_pelicula() {
     cin.ignore(); // Limpiar el buffer para usar getline
     cout << "Ingrese el nuevo nombre de la pelicula: ";
     getline(cin, nuevoNombre);
-    string sql = "UPDATE PELICULAS SET NOMBRE = '" + nuevoNombre + "' WHERE SALA = " + to_string(numSala) + ";";
-    if (sqlite3_exec(db, sql.c_str(), NULL, 0, NULL) == SQLITE_OK) {
+    string sql = "UPDATE SALAS SET PELICULA = '" + nuevoNombre + "' WHERE SALA = " + to_string(numSala) + ";";
+    if (sqlite3_exec(db, sql.c_str(), NULL, 0, NULL) == SQLITE_OK)
+    {
         cout << "Cartelera actualizada con exito." << endl;
     }
 }
@@ -568,7 +577,7 @@ void menu_admin()
 string obtener_nombre_peli(int salaActual)
 {
     string nombre = "";
-    string sql = "SELECT NOMBRE FROM PELICULAS WHERE SALA = " + to_string(salaActual) + ";";
+    string sql = "SELECT PELICULA FROM SALAS WHERE SALA = " + to_string(salaActual) + ";";
     sqlite3_exec(db, sql.c_str(), callback_peli, &nombre, NULL);
     return nombre;
 }
@@ -609,7 +618,6 @@ int main()
             {
                 comprar_tickets(salaActual);
             }
-            break;
             break;
         case '2':
             cancelar_tickets(salaActual);
