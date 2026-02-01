@@ -156,10 +156,7 @@ void inicializarAsientos()
             {
                 for (int c = 0; c < MAXY; c++)
                 {
-                    string sql = "INSERT INTO ASIENTOS VALUES (" +
-                                 to_string(s) + "," + to_string(f) + "," +
-                                 to_string(c) + ", 'o');";
-
+                    string sql = "INSERT INTO ASIENTOS VALUES (" + to_string(s) + "," + to_string(f) + "," + to_string(c) + ", 'o');";
                     sqlite3_exec(db, sql.c_str(), NULL, 0, NULL);
                 }
             }
@@ -233,6 +230,11 @@ void comprar_por_filas(int salaActual)
         cout << endl;
         cout << "Entre que filas desea los asientos: ";
         cin >> fila_1 >> fila_2;
+        if((fila_1==888)||(fila_2==888))
+        {
+            cout << endl;
+            return;
+        }
     }
     while((fila_1<0)||(fila_1>4)||(fila_2<0)||(fila_2>4)||(fila_1>fila_2));
     do
@@ -240,6 +242,11 @@ void comprar_por_filas(int salaActual)
         cout << endl;
         cout << "Cuantos asientos desea: ";
         cin >> n;
+        if(n==888)
+        {
+            cout << endl;
+            return;
+        }
     }
     while ((n<1)||(n>35));
     for(int i=fila_1; (i<fila_2+1)&&(reservado==false); ++i)
@@ -307,10 +314,18 @@ void comprar_por_asiento(int salaActual)
 {
     int nasientos, fil, col;
     char* mensajeError = nullptr;
-    cout << "Cuantos asientos desea: ";
-    cin >> nasientos;
+    do
+    {
+        cout << "Cuantos asientos desea: ";
+        cin >> nasientos;
+        if(nasientos==888)
+        {
+            cout << endl;
+            return;
+        }
+    }
+    while((nasientos<1)||(nasientos>35));
     cout << endl;
-
     for(int i = 0; i < nasientos; i++)
     {
         bool exito = false;
@@ -353,7 +368,7 @@ void comprar_por_asiento(int salaActual)
 void comprar_tickets(int salaActual)
 {
     char c;
-    cout << "Como quieres elegir las entradas (A = Por Fila, B = Por Asiento): ";
+    cout << "Como quieres elegir las entradas (A = Por Fila, B = Por Asiento, C = Menu Principal): ";
     do
     {
         cin >> c;
@@ -364,6 +379,10 @@ void comprar_tickets(int salaActual)
             break;
         case 'B':
             comprar_por_asiento(salaActual);
+            break;
+        case 'C':
+            cout << endl;
+            return;
             break;
         default:
             cout << "Elige una opcion correcta." << endl;
@@ -385,6 +404,11 @@ void cancelar_tickets(int salaActual)
         cout << endl;
         cout << "Fila (0-4) y columna (0-6) a cancelar: ";
         cin >> fila >> columna;
+        if((fila==888)||(columna==888))
+        {
+            cout << endl;
+            return;
+        }
     }
     while((fila<0)||(fila>4)||(columna<0)||(columna>6));
     string sql = "UPDATE ASIENTOS SET ESTADO = 'o' WHERE SALA = " + to_string(salaActual) + " AND FILA = " + to_string(fila) + " AND COLUMNA = " + to_string(columna) + " AND ESTADO = 'x';";
@@ -411,13 +435,16 @@ void reset_asientos()
 {
     int salaAResetear;
     char* mensajeError = nullptr;
-    cout << "Que sala desea resetear completamente? (1-6): ";
-    cin >> salaAResetear;
-    if (salaAResetear < 1 || salaAResetear > 6)
+    do
     {
-        cout << "Error: Sala no valida. Operacion cancelada." << endl;
-        return;
+        cout << "Que sala desea resetear completamente? (1-6): ";
+        cin >> salaAResetear;
+        if(salaAResetear==888)
+        {
+            return;
+        }
     }
+    while((salaAResetear<1)||(salaAResetear>6));
     string sql = "UPDATE ASIENTOS SET ESTADO = 'o' WHERE SALA = " + to_string(salaAResetear) + ";";
     int rc = sqlite3_exec(db, sql.c_str(), NULL, 0, &mensajeError);
     if (rc != SQLITE_OK)
@@ -457,10 +484,27 @@ bool esta_sala_abierta(int salaId)
 void gestionar_bloqueo_sala()
 {
     int salaId, nuevoEstado;
-    cout << "Que sala quieres gestionar (1-6)?: ";
-    cin >> salaId;
-    cout << "Que quieres hacer? (0 = Bloquear, 1 = Abrir): ";
-    cin >> nuevoEstado;
+    do
+    {
+        cout << "Que sala quieres gestionar (1-6)?: ";
+        cin >> salaId;
+        if(salaId==888)
+        {
+            return;
+        }
+    }
+    while ((salaId<1)||(salaId>6));
+    do
+    {
+        cout << "Que quieres hacer? (0 = Bloquear, 1 = Abrir): ";
+        cin >> nuevoEstado;
+        if(nuevoEstado==888)
+        {
+            return;
+        }
+    }
+    while((nuevoEstado!=1)&&(nuevoEstado!=0));
+
     string sql = "UPDATE SALAS SET ABIERTA = " + to_string(nuevoEstado) + " WHERE SALA = " + to_string(salaId) + ";";
     if (sqlite3_exec(db, sql.c_str(), NULL, 0, NULL) == SQLITE_OK)
     {
@@ -501,15 +545,41 @@ void cambiar_pelicula()
 {
     int numSala;
     string nuevoNombre;
-    cout << "Ingrese el numero de sala (1-6): ";
-    cin >> numSala;
+    do
+    {
+        cout << "Ingrese el numero de sala (1-6): ";
+        cin >> numSala;
+        if(numSala==888)
+        {
+            return;
+        }
+    }
+    while((numSala<1)||(numSala>6));
     cin.ignore(); // Limpiar el buffer para usar getline
-    cout << "Ingrese el nuevo nombre de la pelicula: ";
+    cout << "Ingrese el nuevo nombre de la pelicula ('Back' para Menu Principal): ";
     getline(cin, nuevoNombre);
+    if(nuevoNombre=="Back")
+    {
+        return;
+    }
     string sql = "UPDATE SALAS SET PELICULA = '" + nuevoNombre + "' WHERE SALA = " + to_string(numSala) + ";";
     if (sqlite3_exec(db, sql.c_str(), NULL, 0, NULL) == SQLITE_OK)
     {
         cout << "Cartelera actualizada con exito." << endl;
+    }
+}
+
+//Actualiza la contraseña de acceso al menu de admin
+void cambiar_contrasena()
+{
+    cout << endl;
+    string contrasena = "";
+    cout << "Introduce la Nueva Contrasena: ";
+    cin >> contrasena;
+    string sql = "UPDATE CONFIG SET CLAVE = '" + contrasena + "';";
+    if (sqlite3_exec(db, sql.c_str(), NULL, 0, NULL) == SQLITE_OK)
+    {
+        cout << "Contrasena actualizada con exito." << endl;
     }
 }
 
@@ -533,7 +603,8 @@ void menu_admin()
         cout << "2. Abrir/Cerrar Sala" << endl;
         cout << "3. Revisar Ingresos" << endl;
         cout << "4. Actualizar Pelicula" << endl;
-        cout << "5. Salir" << endl << endl;
+        cout << "5. Actualizar Contrasena Admin" << endl;
+        cout << "6. Salir" << endl << endl;
         cout << "Elige una opcion: ";
         cin >> c;
         switch (c)
@@ -561,6 +632,9 @@ void menu_admin()
             cambiar_pelicula();
             break;
         case '5':
+            cambiar_contrasena();
+            break;
+        case '6':
             break;
         default:
             cout << "Opcion incorrecta, saliendo del menu de admin." << endl;
@@ -604,6 +678,7 @@ int main()
         cout << "4. Cambiar Sala" << endl;
         cout << "5. Menu Admin" << endl;
         cout << "6. Salir" << endl << endl;
+        cout << "Nota: Introducir 888 en Cualquier Menu para Volver al Inicio." << endl << endl;
         cout << "Elige una opcion: ";
         cin >> c;
         switch (c)
