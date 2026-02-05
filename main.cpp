@@ -715,7 +715,7 @@ int main()
             cout << endl;
             if (!esta_sala_abierta(salaActual))
             {
-                cout << "ERROR! La sala " << salaActual << " esta cerrada por mantenimiento." << endl;
+                cout << "ERROR! La sala " << salaActual << " esta cerrada por mantenimiento." << endl << endl;;
             }
             else
             {
